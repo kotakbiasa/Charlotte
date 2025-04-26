@@ -13,6 +13,7 @@ COPY . .
 
 # Install Python dependencies without cache
 RUN pip3 install --no-cache-dir --upgrade -r requirements.txt
+RUN pybabel compile -d locales -D messages
 
 # Start the application using gunicorn and the Python script concurrently.
 CMD bash start
