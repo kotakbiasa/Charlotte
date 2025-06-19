@@ -10,6 +10,7 @@ class UrlFilter(BaseFilter):
     This filter checks if the message contains a URL that matches any of the following patterns:
         - YouTube (shorts, standard watch URL)
         - TikTok (short URLs and regular URLs)
+        - Facebook (short URLs and regular URLs)
         - SoundCloud (track URLs)
         - Spotify (track URLs)
         - Apple Music (album URLs)
@@ -38,6 +39,10 @@ class UrlFilter(BaseFilter):
                     ),
                     re.match(
                         r"https?://(?:www\.)?(?:tiktok\.com/.*|(vm|vt)\.tiktok\.com/.+)",
+                        message.text,
+                    ),
+                    re.match(
+                        r"https?://(?:www\.)?(?:facebook\.com/.*|(vm|vt)\.facebook\.com/.+)",
                         message.text,
                     ),
                     # re.match(r'https?://(?:www\.)?tiktok\.com/.*', message.text),
