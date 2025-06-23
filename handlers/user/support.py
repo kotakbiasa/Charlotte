@@ -10,7 +10,7 @@ from loader import dp
 @dp.message(Command("support"))
 async def support_handler(message: types.Message, state: FSMContext):
     answer_message = _(
-        "After some thought, I dare to leave a link to support the project. If you have a desire to improve the work of Charlotte, please follow this link. Every dollar helps keep Charlotte on a quality server just for you. You are not obligated to pay. Only if you have the desire!!!!\n https://buymeacoffee.com/jellytyan \n https://ko-fi.com/jellytyan"
+        "Setelah dipikir-pikir, saya memberanikan diri meninggalkan tautan untuk mendukung proyek ini. Jika Anda ingin meningkatkan kinerja Sosmed Downloader, silakan gunakan tautan ini. Setiap rupiah membantu Sosmed Downloader tetap berjalan di server yang baik – khusus untuk Anda. Anda tidak wajib membayar. Hanya jika Anda benar-benar ingin!!!!\n"
     )
 
     await message.answer(answer_message, parse_mode=ParseMode.HTML)

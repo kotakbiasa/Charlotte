@@ -30,7 +30,6 @@ async def help_command(message: types.Message, state: FSMContext) -> None:
             "  - SoundCloud\n"
             "    I’ll fetch the music, with title, artist, and cover.\n\n"
             "<b>Video Platforms</b>\n"
-            "  - YouTube – Videos, Shorts, or just audio (up to 50 MB)\n"
             "  - TikTok – Videos and images\n"
             "  - Facebook – Videos and images\n"
             "  - BiliBili – Full video support (with limitations)\n"

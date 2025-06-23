@@ -19,12 +19,12 @@ async def start_command(message: Message, state: FSMContext):
 
         await message.answer(
             _(
-                "Henlooooooooooooooooooooooooooooooooooooooooooooooo\n\n"
-                "Nice to meet you, {name}!\n\n"
-                "I'm Charlotte - my hobby is pirating content from various resources.\n\n"
-                "Use _/help_ for more info on me, commands and everything!\n\n"
-                "If something doesn't work, email @jellytyan, or better yet if you send a link to what didn't download🧡\n\n"
-                "P.S.: There is Charlotte Basement, where is posted new updates or service status @charlottesbasement"
+                "Halo!\n\n"
+                "Senang sekali bisa berkenalan dengan Anda, {name}!\n\n"
+                "Saya Sosmed Downloader - saya siap membantu Anda mengunduh berbagai konten dari media sosial.\n\n"
+                "Gunakan _/help_ untuk mengetahui informasi lebih lanjut tentang saya, daftar perintah, dan fitur lainnya!\n\n"
+                "Jika ada kendala, silakan hubungi @KotakBiasa, atau akan lebih baik jika Anda mengirimkan tautan yang gagal diunduh🧡\n\n"
+                "P.S.: Tersedia juga Sosmed Downloader Basement, tempat update terbaru atau status layanan di @KotakBiasaCH"
             ).format(name=message.from_user.first_name),
             parse_mode=ParseMode.MARKDOWN,
         )
