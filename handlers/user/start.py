@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 @dp.message(CommandStart())
 async def start_command(message: Message, state: FSMContext):
     try:
-        await db_add_chat(chat_id=message.chat.id, locale="en", anonime_statistic=0)
+        await db_add_chat(chat_id=message.chat.id, locale="id", anonime_statistic=0)
 
         await message.answer(
             _(
