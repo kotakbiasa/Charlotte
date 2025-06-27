@@ -2,10 +2,15 @@ import asyncio
 import logging
 import os
 import re
+from functools import partial
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Tuple
+import instaloader
+from concurrent.futures import ThreadPoolExecutor
+
 import aiofiles
 import aiohttp
+import yt_dlp
 
 from models.media_models import MediaContent, MediaType
 from services.base_service import BaseService
@@ -16,15 +21,20 @@ logger = logging.getLogger(__name__)
 
 class InstagramService(BaseService):
     name = "Instagram"
+    _download_executor = ThreadPoolExecutor(max_workers=5)
 
     def __init__(self, output_path: str = "other/downloadsTemp"):
         self.output_path = output_path
         os.makedirs(self.output_path, exist_ok=True)
+        self.yt_dlp_opts = {
+            "outtmpl": f"{self.output_path}/%(id)s_{yt_dlp.utils.sanitize_filename('%(title)s')}.%(ext)s",
+            "quiet": True,
+        }
 
     def is_supported(self, url: str) -> bool:
         return bool(
             re.match(
-                r"^(https?://)?(www\.)?(instagram\.com|instagr\.am)/.*$",
+                r"https://www\.instagram\.com/(?:p|reel|tv|stories)/([A-Za-z0-9_-]+)/",
                 url,
             )
         )
@@ -33,58 +43,59 @@ class InstagramService(BaseService):
         return False
 
     async def download(self, url: str) -> List[MediaContent]:
+        result = []
+
         try:
-            api_url = f"https://insta-dl.hazex.workers.dev/?url={url}"
-            async with aiohttp.ClientSession() as session:
-                async with session.get(api_url) as resp:
-                    if resp.status != 200:
+            if re.match(r'https://www\.instagram\.com/reel/([A-Za-z0-9_-]+)', url):
+                with yt_dlp.YoutubeDL(self.yt_dlp_opts) as ydl:
+                    loop = asyncio.get_event_loop()
+                    info_dict = await loop.run_in_executor(
+                        self._download_executor,
+                        lambda: ydl.extract_info(url, download=False)
+                    )
+                    if not info_dict:
                         raise BotError(
                             code=ErrorCode.DOWNLOAD_FAILED,
-                            message="Failed to connect to Instagram API.",
+                            message="Failed to get video info",
                             url=url,
-                            critical=True,
+                            critical=False,
                             is_logged=True,
                         )
-                    result = await resp.json()
-            if result.get("error"):
+                    await loop.run_in_executor(
+                        self._download_executor,
+                        lambda: ydl.download([url])
+                    )
+                    result.append(
+                        MediaContent(
+                            type=MediaType.VIDEO,
+                            path=Path(ydl.prepare_filename(info_dict)),
+                        )
+                    )
+                    return result
+
+            media_urls, filenames = await self._get_instagram_post(url)
+
+            downloaded = await download_all_media(media_urls, filenames)
+
+            if isinstance(downloaded, BotError):
                 raise BotError(
                     code=ErrorCode.DOWNLOAD_FAILED,
-                    message="Instagram API returned error.",
+                    message=f"{downloaded.message}",
                     url=url,
                     critical=True,
                     is_logged=True,
                 )
-            data = result.get("result", {})
-            media_url = data.get("url")
-            ext = data.get("extension", "mp4")
-            if not media_url:
-                raise BotError(
-                    code=ErrorCode.DOWNLOAD_FAILED,
-                    message="No media URL found in API response.",
-                    url=url,
-                    critical=True,
-                    is_logged=True,
-                )
-            filename = f"ig_api_{os.urandom(4).hex()}.{ext}"
-            filepath = os.path.join(self.output_path, filename)
-            async with aiohttp.ClientSession() as session:
-                async with session.get(media_url) as mresp:
-                    if mresp.status != 200:
-                        raise BotError(
-                            code=ErrorCode.DOWNLOAD_FAILED,
-                            message="Failed to download media file.",
-                            url=url,
-                            critical=True,
-                            is_logged=True,
+
+            for path in downloaded:
+                if isinstance(path, str):
+                    result.append(
+                        MediaContent(
+                            type=MediaType.PHOTO if path.endswith(".jpg") else MediaType.VIDEO,
+                            path=Path(path)
                         )
-                    async with aiofiles.open(filepath, "wb") as f:
-                        await f.write(await mresp.read())
-            return [
-                MediaContent(
-                    type=MediaType.VIDEO if ext in ("mp4", "mov") else MediaType.PHOTO,
-                    path=Path(filepath)
-                )
-            ]
+                    )
+
+            return result
         except BotError as e:
             raise e
         except Exception as e:
@@ -96,6 +107,66 @@ class InstagramService(BaseService):
                 is_logged=True,
             )
 
+    async def _get_instagram_post(self, url: str) -> Tuple[List[str], List[str]]:
+        pattern = r'https://www\.instagram\.com/(?:p|reel)/([A-Za-z0-9_-]+)'
+        match = re.match(pattern, url)
+        if match:
+            shortcode = match.group(1)
+        else:
+            raise ValueError("Invalid Instagram URL")
+
+        try:
+            loop = asyncio.get_event_loop()
+
+            L = instaloader.Instaloader()
+
+            post = await loop.run_in_executor(
+                self._download_executor,
+                lambda: instaloader.Post.from_shortcode(L.context, shortcode)
+            )
+
+            if post is None:
+                raise BotError(
+                    code=ErrorCode.INVALID_URL,
+                    message="Instagram: Post not found",
+                    url=url,
+                    critical=False,
+                    is_logged=False,
+                )
+
+            images = []
+            filenames = []
+
+            if post.typename == 'GraphSidecar':
+                for i, node in enumerate(post.get_sidecar_nodes(), start=1):
+                    images.append(node.display_url)
+                    filenames.append(f"{i}_{shortcode}.jpg")
+            elif post.typename == 'GraphImage':
+                images.append(post.url)
+                filenames.append(f"{shortcode}.jpg")
+            elif post.typename == 'GraphVideo':
+                images.append(post.video_url)
+                filenames.append(f"{shortcode}.mp4")
+            else:
+                raise BotError(
+                    code=ErrorCode.INTERNAL_ERROR,
+                    message=f"Unknown post type: {post.typename}",
+                    url=url,
+                    critical=False,
+                    is_logged=True,
+                )
+
+            return images, filenames
+        except BotError as e:
+            raise e
+        except Exception as e:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                message=f"Instagram: {e}",
+                url=url,
+                critical=True,
+                is_logged=True,
+            )
 
 async def run_in_thread(func, *args):
     loop = asyncio.get_running_loop()
