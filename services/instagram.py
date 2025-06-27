@@ -44,34 +44,14 @@ class InstagramService(BaseService):
 
     async def download(self, url: str) -> List[MediaContent]:
         result = []
-
         try:
+            # Coba API eksternal untuk reel/video
             if re.match(r'https://www\.instagram\.com/reel/([A-Za-z0-9_-]+)', url):
-                with yt_dlp.YoutubeDL(self.yt_dlp_opts) as ydl:
-                    loop = asyncio.get_event_loop()
-                    info_dict = await loop.run_in_executor(
-                        self._download_executor,
-                        lambda: ydl.extract_info(url, download=False)
-                    )
-                    if not info_dict:
-                        raise BotError(
-                            code=ErrorCode.DOWNLOAD_FAILED,
-                            message="Failed to get video info",
-                            url=url,
-                            critical=False,
-                            is_logged=True,
-                        )
-                    await loop.run_in_executor(
-                        self._download_executor,
-                        lambda: ydl.download([url])
-                    )
-                    result.append(
-                        MediaContent(
-                            type=MediaType.VIDEO,
-                            path=Path(ydl.prepare_filename(info_dict)),
-                        )
-                    )
+                api_result = await download_instagram_with_api(url, self.output_path)
+                if api_result:
+                    result.append(api_result)
                     return result
+                # fallback ke yt-dlp jika API gagal
 
             media_urls, filenames = await self._get_instagram_post(url)
 
@@ -238,6 +218,40 @@ async def download_video_with_ytdlp(url: str, filename: str) -> str:
             critical=True,
             is_logged=True,
         )
+
+async def download_instagram_with_api(url: str, output_path: str) -> MediaContent | None:
+    import aiohttp
+    from models.media_models import MediaContent, MediaType
+    from pathlib import Path
+
+    api_url = f"https://insta-dl.hazex.workers.dev/?url={url}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+                if data.get("error"):
+                    return None
+                result = data.get("result", {})
+                video_url = result.get("url")
+                ext = result.get("extension", "mp4")
+                if not video_url:
+                    return None
+                filename = f"ig_api_{os.urandom(4).hex()}.{ext}"
+                filepath = os.path.join(output_path, filename)
+                async with session.get(video_url) as vresp:
+                    if vresp.status != 200:
+                        return None
+                    f = await aiofiles.open(filepath, "wb")
+                    await f.write(await vresp.read())
+                    await f.close()
+                return MediaContent(
+                    type=MediaType.VIDEO,
+                    path=Path(filepath)
+                )
+    except Exception:
+        return None
 
 def clean_dict(d):
     return {str(k): str(v) for k, v in d.items() if v is not None and k is not None}
