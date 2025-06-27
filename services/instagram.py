@@ -97,67 +97,6 @@ class InstagramService(BaseService):
             )
 
 
-    async def _get_instagram_post(self, url: str) -> Tuple[List[str], List[str]]:
-        pattern = r'https://www\.instagram\.com/(?:p|reel)/([A-Za-z0-9_-]+)'
-        match = re.match(pattern, url)
-        if match:
-            shortcode = match.group(1)
-        else:
-            raise ValueError("Invalid Instagram URL")
-
-        try:
-            loop = asyncio.get_event_loop()
-
-            L = instaloader.Instaloader()
-
-            post = await loop.run_in_executor(
-                self._download_executor,
-                lambda: instaloader.Post.from_shortcode(L.context, shortcode)
-            )
-
-            if post is None:
-                raise BotError(
-                    code=ErrorCode.INVALID_URL,
-                    message="Instagram: Post not found",
-                    url=url,
-                    critical=False,
-                    is_logged=False,
-                )
-
-            images = []
-            filenames = []
-
-            if post.typename == 'GraphSidecar':
-                for i, node in enumerate(post.get_sidecar_nodes(), start=1):
-                    images.append(node.display_url)
-                    filenames.append(f"{i}_{shortcode}.jpg")
-            elif post.typename == 'GraphImage':
-                images.append(post.url)
-                filenames.append(f"{shortcode}.jpg")
-            elif post.typename == 'GraphVideo':
-                images.append(post.video_url)
-                filenames.append(f"{shortcode}.mp4")
-            else:
-                raise BotError(
-                    code=ErrorCode.INTERNAL_ERROR,
-                    message=f"Unknown post type: {post.typename}",
-                    url=url,
-                    critical=False,
-                    is_logged=True,
-                )
-
-            return images, filenames
-        except BotError as e:
-            raise e
-        except Exception as e:
-            raise BotError(
-                code=ErrorCode.DOWNLOAD_FAILED,
-                message=f"Instagram: {e}",
-                url=url,
-                critical=True,
-                is_logged=True,
-            )
-
 async def run_in_thread(func, *args):
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, partial(func, *args))
