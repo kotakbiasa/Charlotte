@@ -96,8 +96,8 @@ class InstagramService(BaseService):
                 is_logged=True,
             )
 
-def clean_dict(d):
-    return {str(k): str(v) for k, v in d.items() if v is not None and k is not None}
+    def clean_dict(d):
+        return {str(k): str(v) for k, v in d.items() if v is not None and k is not None}
             logger.error(f"Instagram API download failed: {e}")
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
