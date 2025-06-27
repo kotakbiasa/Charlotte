@@ -2,15 +2,10 @@ import asyncio
 import logging
 import os
 import re
-from functools import partial
 from pathlib import Path
-from typing import List, Tuple, Optional
-import instaloader
-from concurrent.futures import ThreadPoolExecutor
-
+from typing import List, Optional
 import aiofiles
 import aiohttp
-import yt_dlp
 
 from models.media_models import MediaContent, MediaType
 from services.base_service import BaseService
@@ -21,15 +16,10 @@ logger = logging.getLogger(__name__)
 
 class InstagramService(BaseService):
     name = "Instagram"
-    _download_executor = ThreadPoolExecutor(max_workers=5)
 
     def __init__(self, output_path: str = "other/downloadsTemp"):
         self.output_path = output_path
         os.makedirs(self.output_path, exist_ok=True)
-        self.yt_dlp_opts = {
-            "outtmpl": f"{self.output_path}/%(id)s_{yt_dlp.utils.sanitize_filename('%(title)s')}.%(ext)s",
-            "quiet": True,
-        }
 
     def is_supported(self, url: str) -> bool:
         return bool(
@@ -98,6 +88,16 @@ class InstagramService(BaseService):
         except BotError as e:
             raise e
         except Exception as e:
+            raise BotError(
+                code=ErrorCode.DOWNLOAD_FAILED,
+                message=f"Instagram: {e}",
+                url=url,
+                critical=True,
+                is_logged=True,
+            )
+
+def clean_dict(d):
+    return {str(k): str(v) for k, v in d.items() if v is not None and k is not None}
             logger.error(f"Instagram API download failed: {e}")
             raise BotError(
                 code=ErrorCode.DOWNLOAD_FAILED,
