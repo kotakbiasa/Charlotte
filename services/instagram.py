@@ -60,12 +60,9 @@ class InstagramService(BaseService):
                     is_logged=True,
                 )
             data = result.get("result", {})
-            video_url = data.get("url")
-            duration = data.get("duration")
-            quality = data.get("quality")
+            media_url = data.get("url")
             ext = data.get("extension", "mp4")
-            size = data.get("formattedSize")
-            if not video_url:
+            if not media_url:
                 raise BotError(
                     code=ErrorCode.DOWNLOAD_FAILED,
                     message="No media URL found in API response.",
@@ -76,8 +73,8 @@ class InstagramService(BaseService):
             filename = f"ig_api_{os.urandom(4).hex()}.{ext}"
             filepath = os.path.join(self.output_path, filename)
             async with aiohttp.ClientSession() as session:
-                async with session.get(video_url) as vresp:
-                    if vresp.status != 200:
+                async with session.get(media_url) as mresp:
+                    if mresp.status != 200:
                         raise BotError(
                             code=ErrorCode.DOWNLOAD_FAILED,
                             message="Failed to download media file.",
@@ -86,8 +83,7 @@ class InstagramService(BaseService):
                             is_logged=True,
                         )
                     async with aiofiles.open(filepath, "wb") as f:
-                        await f.write(await vresp.read())
-            # Optionally, you can attach metadata to MediaContent if needed
+                        await f.write(await mresp.read())
             return [
                 MediaContent(
                     type=MediaType.VIDEO if ext in ("mp4", "mov") else MediaType.PHOTO,
@@ -203,14 +199,14 @@ async def download_all_media(media_urls, filenames):
     async with aiohttp.ClientSession() as session:
         tasks = []
         for url, name in zip(media_urls, filenames):
-            if name.endswith(".mp4"):
-                tasks.append(download_video_with_ytdlp(url, name))
-            else:
-                tasks.append(download_media(session, url, name))
+            # Only support direct download via API, do not use yt_dlp
+            tasks.append(download_media(session, url, name))
         results = await asyncio.gather(*tasks)
         return results
 
-async def download_video_with_ytdlp(url: str, filename: str) -> str:
+def clean_dict(d):
+    return {str(k): str(v) for k, v in d.items() if v is not None and k is not None}
+    return {str(k): str(v) for k, v in d.items() if v is not None and k is not None}
     try:
         def _download():
             ydl_opts = {
