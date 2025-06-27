@@ -96,16 +96,6 @@ class InstagramService(BaseService):
                 is_logged=True,
             )
 
-    def clean_dict(d):
-        return {str(k): str(v) for k, v in d.items() if v is not None and k is not None}
-            logger.error(f"Instagram API download failed: {e}")
-            raise BotError(
-                code=ErrorCode.DOWNLOAD_FAILED,
-                message=f"Instagram: {e}",
-                url=url,
-                critical=True,
-                is_logged=True,
-            )
 
     async def _get_instagram_post(self, url: str) -> Tuple[List[str], List[str]]:
         pattern = r'https://www\.instagram\.com/(?:p|reel)/([A-Za-z0-9_-]+)'
